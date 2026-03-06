@@ -2,41 +2,30 @@ import { observer } from 'mobx-react-lite';
 import { gameStore } from '../stores/gameStore';
 import { useUIStore } from '../stores/uiStore';
 
-/**
- * Task 4: Комбинированное использование MobX + Zustand
- *
- * Цель: Объединить MobX (бизнес-логика) и Zustand (UI) в одном приложении
- *
- * Задание:
- * 1. Возьмите готовый GameStore (MobX) из Task2
- * 2. Возьмите готовый UIStore (Zustand) из Task3
- * 3. Доработайте GameStore: добавьте таймер, сохранение статистики
- * 4. Доработайте UIStore: добавьте управление модальными окнами
- * 5. Создайте компонент, который использует ОБА store одновременно
- * 6. Примените тему из UIStore к игровому интерфейсу
- *
- * Разделение ответственности:
- * - MobX (GameStore): вопросы, счёт, прогресс, таймер, статистика
- * - Zustand (UIStore): тема, звук, модальные окна, настройки UI
- */
-
 const Task4 = observer(() => {
   // MobX - бизнес-логика
-  const { gameStatus, currentQuestion,
-    // TODO: убрать комментарий после реализации gameStore
-    // selectedAnswer, score, progress
+  const { 
+    gameStatus, 
+    currentQuestion,
+    selectedAnswer, 
+    score, 
+    progress,
+    currentQuestionIndex,
+    questions,
+    correctAnswersCount,
+    isLastQuestion,
+    formattedTime,
+    statistics
   } = gameStore;
-  const selectedAnswer = null; // TODO: заменить на gameStore.selectedAnswer
-  const score = 0; // TODO: заменить на gameStore.score
-  const progress = 0; // TODO: заменить на gameStore.progress
 
   // Zustand - UI состояние
   const theme = useUIStore((state) => state.theme);
-  // TODO: убрать комментарий после реализации uiStore
-  // const soundEnabled = useUIStore((state) => state.soundEnabled);
-  // const toggleTheme = useUIStore((state) => state.toggleTheme);
-  const soundEnabled = true; // TODO: заменить на селектор
-  const toggleTheme = () => {}; // TODO: заменить на селектор
+  const soundEnabled = useUIStore((state) => state.soundEnabled);
+  const toggleTheme = useUIStore((state) => state.toggleTheme);
+  const settingsModalOpen = useUIStore((state) => state.settingsModalOpen);
+  const toggleSettingsModal = useUIStore((state) => state.toggleSettingsModal);
+  const statsModalOpen = useUIStore((state) => state.statsModalOpen);
+  const toggleStatsModal = useUIStore((state) => state.toggleStatsModal);
 
   // Цвета в зависимости от темы
   const bgGradient = theme === 'light'
@@ -54,8 +43,14 @@ const Task4 = observer(() => {
     return (
       <div className={`min-h-screen bg-gradient-to-br ${bgGradient} flex items-center justify-center p-4 transition-colors duration-300`}>
         <div className={`${cardBg} rounded-2xl shadow-2xl p-8 max-w-md w-full transition-colors duration-300`}>
-          {/* Переключатель темы */}
-          <div className="flex justify-end mb-4">
+          {/* Переключатель темы и кнопка статистики */}
+          <div className="flex justify-between mb-4">
+            <button
+              onClick={toggleStatsModal}
+              className={`p-2 rounded-lg ${theme === 'light' ? 'bg-gray-100 hover:bg-gray-200' : 'bg-gray-700 hover:bg-gray-600'} transition-colors`}
+            >
+              📊
+            </button>
             <button
               onClick={toggleTheme}
               className={`p-2 rounded-lg ${theme === 'light' ? 'bg-gray-100 hover:bg-gray-200' : 'bg-gray-700 hover:bg-gray-600'} transition-colors`}
@@ -85,20 +80,53 @@ const Task4 = observer(() => {
               <strong>Task 4:</strong> Комбинация MobX + Zustand
             </p>
             <ul className={`text-xs ${theme === 'light' ? 'text-purple-800' : 'text-gray-400'} space-y-1`}>
-              <li>• <strong>MobX:</strong> Игровая логика (вопросы, счёт)</li>
-              <li>• <strong>Zustand:</strong> UI настройки (тема, звук)</li>
+              <li>• <strong>MobX:</strong> Игровая логика (вопросы, счёт, таймер, статистика)</li>
+              <li>• <strong>Zustand:</strong> UI настройки (тема, звук, модальные окна)</li>
             </ul>
           </div>
         </div>
+
+        {/* Модальное окно статистики */}
+        {statsModalOpen && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className={`${cardBg} rounded-2xl shadow-2xl p-6 max-w-md w-full transition-colors duration-300`}>
+              <h3 className={`text-2xl font-bold mb-4 ${textColor}`}>Статистика</h3>
+              
+              <div className="space-y-3 mb-6">
+                <div className={`flex justify-between ${mutedText}`}>
+                  <span>Всего игр:</span>
+                  <span className="font-semibold">{statistics.totalGames}</span>
+                </div>
+                <div className={`flex justify-between ${mutedText}`}>
+                  <span>Лучший счёт:</span>
+                  <span className="font-semibold">{statistics.bestScore}</span>
+                </div>
+                <div className={`flex justify-between ${mutedText}`}>
+                  <span>Средний счёт:</span>
+                  <span className="font-semibold">{statistics.averageScore.toFixed(1)}</span>
+                </div>
+                <div className={`flex justify-between ${mutedText}`}>
+                  <span>Правильных ответов:</span>
+                  <span className="font-semibold">{statistics.totalCorrectAnswers}</span>
+                </div>
+              </div>
+
+              <button
+                onClick={toggleStatsModal}
+                className={`w-full ${theme === 'light' ? 'bg-gray-200 hover:bg-gray-300' : 'bg-gray-700 hover:bg-gray-600'} text-gray-800 py-2 px-4 rounded-lg font-semibold transition-colors`}
+              >
+                Закрыть
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
 
   // Экран результатов
   if (gameStatus === 'finished') {
-    // TODO: убрать комментарий после реализации gameStore
-    // const percentage = Math.round((gameStore.correctAnswersCount / gameStore.questions.length) * 100);
-    const percentage = 0;
+    const percentage = Math.round((correctAnswersCount / questions.length) * 100);
     const getEmoji = () => {
       if (percentage >= 80) return '🏆';
       if (percentage >= 60) return '😊';
@@ -122,23 +150,24 @@ const Task4 = observer(() => {
             <p className={mutedText}>очков заработано</p>
           </div>
 
-          {/* TODO: убрать комментарий после реализации gameStore */}
-          {/* <div className={`${theme === 'light' ? 'bg-gray-100' : 'bg-gray-700'} rounded-lg p-4 mb-6`}>
+          <div className={`${theme === 'light' ? 'bg-gray-100' : 'bg-gray-700'} rounded-lg p-4 mb-6`}>
             <p className={`text-lg ${textColor}`}>
-              Правильных ответов: <span className="font-bold">{gameStore.correctAnswersCount} из {gameStore.questions.length}</span>
+              Правильных ответов: <span className="font-bold">{correctAnswersCount} из {questions.length}</span>
             </p>
             <p className={`text-2xl font-bold mt-2 ${theme === 'light' ? 'text-purple-600' : 'text-purple-400'}`}>
               {percentage}%
             </p>
-          </div> */}
+            <p className={`text-sm ${mutedText} mt-2`}>
+              Время: {formattedTime}
+            </p>
+          </div>
 
-          {/* TODO: убрать комментарий после реализации gameStore */}
-          {/* <button
+          <button
             onClick={() => gameStore.resetGame()}
             className={`w-full ${primaryColor} ${primaryHover} text-white py-3 px-6 rounded-xl font-semibold transition-all transform hover:scale-105`}
           >
             Играть снова
-          </button> */}
+          </button>
         </div>
       </div>
     );
@@ -153,14 +182,22 @@ const Task4 = observer(() => {
         {/* Заголовок с темой */}
         <div className={`${cardBg} rounded-lg shadow-md p-4 mb-4 transition-colors duration-300`}>
           <div className="flex justify-between items-center mb-2">
-            {/* TODO: убрать комментарий после реализации gameStore */}
-            {/* <span className={`text-sm ${mutedText}`}>
-              Вопрос {gameStore.currentQuestionIndex + 1} из {gameStore.questions.length}
-            </span> */}
+            <span className={`text-sm ${mutedText}`}>
+              Вопрос {currentQuestionIndex + 1} из {questions.length}
+            </span>
             <div className="flex items-center gap-3">
+              <span className={`text-sm ${mutedText}`}>
+                ⏱️ {formattedTime}
+              </span>
               <span className={`text-xl font-bold ${theme === 'light' ? 'text-purple-600' : 'text-purple-400'}`}>
                 Счёт: {score}
               </span>
+              <button
+                onClick={toggleSettingsModal}
+                className={`p-2 rounded ${theme === 'light' ? 'bg-gray-100 hover:bg-gray-200' : 'bg-gray-700 hover:bg-gray-600'} transition-colors`}
+              >
+                ⚙️
+              </button>
               <button
                 onClick={toggleTheme}
                 className={`p-2 rounded ${theme === 'light' ? 'bg-gray-100 hover:bg-gray-200' : 'bg-gray-700 hover:bg-gray-600'} transition-colors`}
@@ -237,16 +274,77 @@ const Task4 = observer(() => {
           </div>
 
           {/* Кнопка "Далее" */}
-          {/* TODO: убрать комментарий после реализации gameStore */}
-          {/* {selectedAnswer !== null && (
+          {selectedAnswer !== null && (
             <button
               onClick={() => gameStore.nextQuestion()}
               className={`mt-6 w-full ${primaryColor} ${primaryHover} text-white py-3 px-6 rounded-lg font-semibold transition-colors`}
             >
-              {gameStore.isLastQuestion ? 'Завершить' : 'Следующий вопрос'}
+              {isLastQuestion ? 'Завершить' : 'Следующий вопрос'}
             </button>
-          )} */}
+          )}
         </div>
+
+        {/* Модальное окно настроек */}
+        {settingsModalOpen && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className={`${cardBg} rounded-2xl shadow-2xl p-6 max-w-md w-full transition-colors duration-300`}>
+              <h3 className={`text-2xl font-bold mb-4 ${textColor}`}>Настройки</h3>
+              
+              <div className="mb-6">
+                <label className={`block text-sm font-semibold mb-3 ${textColor}`}>Тема оформления</label>
+                <div className="flex gap-4">
+                  <button
+                    onClick={() => useUIStore.getState().setTheme('light')}
+                    className={`
+                      flex-1 py-3 px-4 rounded-lg font-semibold transition-all
+                      ${theme === 'light'
+                        ? 'bg-purple-500 text-white shadow-lg'
+                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                      }
+                    `}
+                  >
+                    ☀️ Светлая
+                  </button>
+                  <button
+                    onClick={() => useUIStore.getState().setTheme('dark')}
+                    className={`
+                      flex-1 py-3 px-4 rounded-lg font-semibold transition-all
+                      ${theme === 'dark'
+                        ? 'bg-purple-500 text-white shadow-lg'
+                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                      }
+                    `}
+                  >
+                    🌙 Тёмная
+                  </button>
+                </div>
+              </div>
+
+              <div className="mb-6">
+                <label className={`block text-sm font-semibold mb-3 ${textColor}`}>Звуковые эффекты</label>
+                <button
+                  onClick={useUIStore.getState().toggleSound}
+                  className={`
+                    w-full py-4 px-6 rounded-lg font-semibold transition-all
+                    ${soundEnabled
+                      ? 'bg-green-500 text-white hover:bg-green-600'
+                      : 'bg-gray-300 text-gray-600 hover:bg-gray-400'
+                    }
+                  `}
+                >
+                  {soundEnabled ? '🔊 Звук включен' : '🔇 Звук выключен'}
+                </button>
+              </div>
+
+              <button
+                onClick={toggleSettingsModal}
+                className={`w-full ${theme === 'light' ? 'bg-gray-200 hover:bg-gray-300' : 'bg-gray-700 hover:bg-gray-600'} text-gray-800 py-2 px-4 rounded-lg font-semibold transition-colors`}
+              >
+                Закрыть
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Подсказка */}
         <div className={`mt-4 backdrop-blur-sm rounded-lg p-4 ${theme === 'light' ? 'bg-white/20' : 'bg-black/20'}`}>
