@@ -6,16 +6,14 @@ export const mockQuestions: Question[] = [
     question: "Что выведет console.log(typeof null)?",
     options: ["null", "undefined", "object", "number"],
     correctAnswer: 2,
-    difficulty: "easy",
-    type: "normal"
+    difficulty: "easy"
   },
   {
     id: 2,
     question: "Какой метод НЕ изменяет исходный массив?",
     options: ["push()", "pop()", "map()", "sort()"],
     correctAnswer: 2,
-    difficulty: "medium",
-    type: "normal"
+    difficulty: "medium"
   },
   {
     id: 3,
@@ -27,23 +25,20 @@ export const mockQuestions: Question[] = [
       "Анонимная функция"
     ],
     correctAnswer: 1,
-    difficulty: "hard",
-    type: "normal"
+    difficulty: "hard"
   },
   {
     id: 4,
     question: "Чему равно '2' + 2?",
     options: ["'22'", "4", "NaN", "Error"],
     correctAnswer: 0,
-    difficulty: "easy",
-    type: "normal"
+    difficulty: "easy"
   },
   {
     id: 5,
     question: "Что выведет console.log([] == ![])?",
     options: ["true", "false", "undefined", "Error"],
     correctAnswer: 0,
-    difficulty: "hard",
-    type: "normal"
+    difficulty: "hard"
   }
 ];
