@@ -39,6 +39,8 @@ class GameStore {
   }
 
   selectAnswer(answerIndex: number) {
+    console.log('selectAnswer called with index:', answerIndex);
+    console.log('before - selectedAnswers:', this.selectedAnswers);
     // Проверяем, что ответ еще не был выбран и игра идет
     if (this.gameStatus !== 'playing') {
       return;
@@ -71,6 +73,8 @@ class GameStore {
       selectedAnswers: [...this.selectedAnswers],
       isCorrect: isCorrect
     });
+    
+    this.selectedAnswers = [...this.selectedAnswers];
   }
 
   nextQuestion() {
