@@ -6,25 +6,115 @@ import { githubCallbackSchema } from '../utils/validation.js'
 const prisma = new PrismaClient() 
 const auth = new Hono()
 
-// Mock данные
-const MOCK_USERS: Record<string, { id: string; email: string; name: string }> = {
+// Типы и ошибки
+type GitHubUser = {
+  id: number;
+  email?: string;
+  name?: string;
+};
+
+class GitHubServiceError extends Error {
+  constructor(
+    message: string,
+    public readonly statusCode: 400 | 500,
+  ) {
+    super(message);
+    this.name = "GitHubServiceError";
+  }
+}
+
+// MOCK данные
+const MOCK_USERS: Record<string, GitHubUser> = {
   'test_code': {
-    id: '12345',
+    id: 12345,
     email: 'test@example.com',
     name: 'Test User'
   },
   'test_code_2': {
-    id: '67890',
+    id: 67890,
     email: 'test2@example.com',
     name: 'Test User 2'
   }
+};
+
+// Реальные функции GitHub
+async function exchangeCodeForAccessToken(code: string): Promise<string> {
+  const clientId = process.env.GITHUB_CLIENT_ID;
+  const clientSecret = process.env.GITHUB_CLIENT_SECRET;
+
+  if (!clientId || !clientSecret) {
+    throw new GitHubServiceError("GitHub credentials not configured", 500);
+  }
+
+  const tokenResponse = await fetch(
+    "https://github.com/login/oauth/access_token",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify({
+        client_id: clientId,
+        client_secret: clientSecret,
+        code,
+      }),
+    },
+  );
+
+  const tokenData = await tokenResponse.json() as { access_token?: string; error?: string };
+
+  if (!tokenData.access_token) {
+    throw new GitHubServiceError("Failed to get access token from GitHub", 400);
+  }
+
+  return tokenData.access_token;
+}
+
+async function getGitHubUser(accessToken: string): Promise<GitHubUser> {
+  const userResponse = await fetch("https://api.github.com/user", {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      Accept: "application/json",
+    },
+  });
+
+  const githubUser = await userResponse.json() as { id?: number; email?: string; name?: string };
+
+  if (!githubUser.id) {
+    throw new GitHubServiceError("Failed to get user data from GitHub", 400);
+  }
+
+  return {
+    id: githubUser.id,
+    email: githubUser.email,
+    name: githubUser.name,
+  };
+}
+
+async function getGitHubUserByCode(code: string): Promise<GitHubUser> {
+  // Если code начинается с test_ - используем mock
+  if (code.startsWith('test_')) {
+    const mockUser = MOCK_USERS[code];
+    if (mockUser) {
+      return mockUser;
+    }
+    return {
+      id: Math.floor(Math.random() * 1000000),
+      email: `user_${code}@example.com`,
+      name: `User ${code}`,
+    };
+  }
+
+  // Иначе - реальный GitHub OAuth
+  const accessToken = await exchangeCodeForAccessToken(code);
+  return getGitHubUser(accessToken);
 }
 
 // POST /api/auth/github/callback
 auth.post('/github/callback', async (c) => {
   try {
     const body = await c.req.json()
-    console.log('Request body:', body)
     
     const validation = githubCallbackSchema.safeParse(body)
     
@@ -36,41 +126,31 @@ auth.post('/github/callback', async (c) => {
     }
 
     const { code } = validation.data
-    console.log('Processing code:', code)
 
+    // Получаем данные пользователя
     let githubUser
-
-    // Mock режим для тестирования
-    if (code.startsWith('test_')) {
-      console.log('Using mock mode')
-      
-      githubUser = MOCK_USERS[code]
-      
-      if (!githubUser) {
-        githubUser = {
-          id: `mock_${Date.now()}`,
-          email: `user_${code}@example.com`,
-          name: `User ${code}`
-        }
+    try {
+      githubUser = await getGitHubUserByCode(code)
+    } catch (error) {
+      if (error instanceof GitHubServiceError) {
+        return c.json({ error: error.message }, error.statusCode)
       }
-    } else {
-      return c.json({ 
-        error: 'Real GitHub OAuth not implemented. Use test_* codes for testing.' 
-      }, 501)
+      return c.json({ error: 'GitHub authentication failed' }, 500)
     }
 
-    
+    // Сохраняем в базу
+    const githubId = String(githubUser.id)
     const user = await prisma.user.upsert({
-      where: { githubId: githubUser.id },
+      where: { githubId },
       update: {
         name: githubUser.name,
-        email: githubUser.email
+        email: githubUser.email || `${githubId}@github.user`,
       },
       create: {
-        githubId: githubUser.id,
-        name: githubUser.name,
-        email: githubUser.email
-      }
+        githubId,
+        name: githubUser.name || `User ${githubId}`,
+        email: githubUser.email || `${githubId}@github.user`,
+      },
     })
 
     // Создаем JWT токен
@@ -78,13 +158,12 @@ auth.post('/github/callback', async (c) => {
       sub: user.id,
       githubId: user.githubId,
       email: user.email,
-      exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 7 // 7 дней
+      exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 7
     }
 
     const secret = process.env.JWT_SECRET || 'dev-secret-key'
     const token = await sign(payload, secret)
 
-    // Возвращаем ответ
     return c.json({
       success: true,
       token,
@@ -106,6 +185,7 @@ auth.post('/github/callback', async (c) => {
   }
 })
 
+// GET /api/auth/me
 auth.get('/me', async (c) => {
   try {
     const authHeader = c.req.header('Authorization')
@@ -119,7 +199,6 @@ auth.get('/me', async (c) => {
     }
 
     const token = authHeader.split(' ')[1]
-
     const secret = process.env.JWT_SECRET || 'dev-secret-key'
     const payload = await verify(token, secret, 'HS256')
 

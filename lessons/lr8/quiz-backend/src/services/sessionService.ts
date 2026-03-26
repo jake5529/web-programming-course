@@ -1,5 +1,4 @@
-// src/services/sessionService.ts
-import { PrismaClient } from '@prisma/client'
+import { PrismaClient, Prisma } from '@prisma/client'
 import { scoringService } from './scoringService.js'
 
 const prisma = new PrismaClient()
@@ -7,13 +6,12 @@ const prisma = new PrismaClient()
 export interface SubmitAnswerInput {
   sessionId: string
   questionId: string
-  userAnswer: any // JSON данные
+  userAnswer: any
 }
 
 export class SessionService {
-
   async submitAnswer(data: SubmitAnswerInput) {
-    return await prisma.$transaction(async (tx) => {
+    return await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       // 1. Проверяем сессию
       const session = await tx.session.findUnique({
         where: { id: data.sessionId },
@@ -71,7 +69,6 @@ export class SessionService {
         )
         isCorrect = score > 0
       }
-      // Для essay score остается null до проверки админом
 
       // 5. Сохраняем ответ
       const answer = await tx.answer.create({
@@ -89,7 +86,7 @@ export class SessionService {
   }
 
   async submitSession(sessionId: string) {
-    return await prisma.$transaction(async (tx) => {
+    return await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const session = await tx.session.findUnique({
         where: { id: sessionId },
         include: { 
@@ -107,12 +104,10 @@ export class SessionService {
         throw new Error('Сессия уже завершена или истекла')
       }
 
-      // Вычисляем общий балл (только по автоматически проверенным ответам)
-      const totalScore = session.answers.reduce((sum, answer) => {
-        return sum + (answer.score || 0)
-      }, 0)
+    const totalScore = session.answers.reduce((sum: number, answer: any) => {
+      return sum + (answer.score || 0)
+    }, 0)
 
-      // Обновляем сессию
       const updatedSession = await tx.session.update({
         where: { id: sessionId },
         data: {
@@ -127,53 +122,52 @@ export class SessionService {
   }
 
   async getSessionWithAnswers(sessionId: string, userId: string) {
-  const session = await prisma.session.findUnique({
-    where: { id: sessionId },
-    // Используем select вместо include для контроля полей
-    select: {
-      id: true,
-      status: true,
-      score: true,
-      startedAt: true,
-      expiresAt: true,
-      completedAt: true,
-      user: {
-        select: {
-          id: true,
-          name: true,
-          email: true // только нужные поля пользователя
-        }
-      },
-      answers: {
-        select: {
-          id: true,
-          userAnswer: true,
-          score: true,
-          isCorrect: true,
-          createdAt: true,
-          question: {
-            select: {
-              id: true,
-              text: true,
-              type: true,
-              points: true,
-              category: {
-                select: {
-                  name: true // только имя категории
+    const session = await prisma.session.findUnique({
+      where: { id: sessionId },
+      select: {
+        id: true,
+        status: true,
+        score: true,
+        startedAt: true,
+        expiresAt: true,
+        completedAt: true,
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true
+          }
+        },
+        answers: {
+          select: {
+            id: true,
+            userAnswer: true,
+            score: true,
+            isCorrect: true,
+            createdAt: true,
+            question: {
+              select: {
+                id: true,
+                text: true,
+                type: true,
+                points: true,
+                category: {
+                  select: {
+                    name: true
+                  }
                 }
               }
             }
           }
         }
       }
-    }
-  })
+    })
 
-  if (!session) throw new Error('Сессия не найдена')
-  if (session.user.id !== userId) throw new Error('Нет доступа к этой сессии')
+    if (!session) throw new Error('Сессия не найдена')
+    if (session.user.id !== userId) throw new Error('Нет доступа к этой сессии')
 
-  return session
-}
+    return session
+  }
 }
 
 export const sessionService = new SessionService()
